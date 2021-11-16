@@ -1,0 +1,1 @@
+gcc main.cpp -o run -lSDL2main -lm $(pkg-config --cflags --libs  sdl2 SDL2_mixer SDL2_image ) -lstdc++
