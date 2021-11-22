@@ -181,16 +181,25 @@ class Translation
       }
     }
 
+    void Enlarge(double EnlargementFactor)
+    {
+      int i;
+      for(i = 0; i < NPoints; i++)
+      {
+        Corner[i].Corner[0]*=EnlargementFactor;
+        Corner[i].Corner[1]*=EnlargementFactor;
+        Corner[i].Corner[2]*=EnlargementFactor;
+      }
+    }
+
 };
 
 class Cubes: public Translation
 {
   public:
-    //Corners* Corner = (Corners*)calloc(8, sizeof(Corners));
+    //Corners* Corner = (Corners*)calloc(8, sizeof(Corners)); //Decleared by Translation
     Edges* Edge = (Edges*)calloc(12, sizeof(Edges));
     Surfaces* Surface = (Surfaces*)calloc(6, sizeof(Surfaces));
-
-    Translation T;
 
     Corners Center;
 
@@ -268,8 +277,6 @@ class Cubes: public Translation
         }
       }
     }
-
-
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -302,43 +309,50 @@ void close_SDL()
   SDL_Quit();
 }
 
-void DrawCirc_SDL(int x, int y, int r)
+
+void DrawCirc_SDL(int x, int y, int z, int r)
 {
-  int i, j;
+  int i, j, k;
+  int iView, jView;
+  double ViewChange;
   for(i = -r; i < r + 1; i++)
   {
     for(j = -r; j < r + 1; j++)
     {
-      if(i * i + j * j < r * r)
+      for(k = -r; k < r + 1; k++)
       {
-        SDL_SetRenderDrawColor(rend, 255, 255, 255, 0xFF); //Draw pixel
-        SDL_RenderDrawPoint(rend, i + x, j + y); //Draw pixel
+        if(i * i + j * j + k * k < r * r && k + z < DEPTH)
+        {
+          ViewChange = (1.0 * DEPTH) / (2 * DEPTH - k - z);
+          SDL_SetRenderDrawColor(rend, 255, 255, 255, 0xFF); //Draw pixel
+          SDL_RenderDrawPoint(rend, int((i + x - WIDTH / 2) * ViewChange + WIDTH / 2), int((j + y - HEIGHT / 2) * ViewChange) + HEIGHT / 2); //Draw pixel
+        }
       }
     }
   }
 }
 
-void draw_Points(Corners* Corner, Corners Center, int NCorners, coordInfo Grid)
+void ClearRender_SDL()
 {
   SDL_RenderClear(rend);
-
-  int i, j, k, l;
-
   SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
-
-  // Clear the entire screen to our selected color.
   SDL_RenderClear(rend);
+}
+
+void draw_Points(Corners* Corner, Corners Center, int NCorners, coordInfo Grid)
+{
+  int i, j, k, l;
+  int CircRadius = 10;
+  // Clear the entire screen to our selected color.
 
   for(l = 0; l < NCorners; l++)
   {
     i = Grid.xPix(Corner[l].Corner[0] + Center.Corner[0]);
     j = Grid.yPix(Corner[l].Corner[1] + Center.Corner[1]);
-    k = Grid.yPix(Corner[l].Corner[2] + Center.Corner[2]);
+    k = Grid.zPix(Corner[l].Corner[2] + Center.Corner[2]);
 
-    DrawCirc_SDL(i, j, 50 / (0.01 * (DEPTH - k) + 1));
+    DrawCirc_SDL(i, j, k, CircRadius);
   }
-
-  SDL_RenderPresent(rend);
 }
 
 
@@ -350,10 +364,6 @@ void events_SDL()
   MyCubeCenter.MakeCorners(0.0, 0.0, 0.0);
 
   Cubes MyCube(MyCubeCenter, CubeSize);
-
-  //printf("%f\n", MyCube.CubeCorner[0].Corner[0]);
-  //printf("%f\n", MyCube.CubeEdge[0].Edge[0].Corner[0]);
-  //printf("%f\n", MyCube.CubeSurface[0].Surface[0].Edge[0].Corner[0]);
 
   int i, j, k, l;
 
@@ -374,7 +384,7 @@ void events_SDL()
   Uint32 buttons;
   SDL_Event event;
 
-  double phiX, phiY, phiZ, x, y, z;
+  double phiX, phiY, phiZ, x, y, z, EnlargementFactor;
   phiX = 0;
   phiY = 0;
   phiZ = 0;
@@ -382,6 +392,13 @@ void events_SDL()
   x = 0;
   y = 0;
   z = 0;
+
+  EnlargementFactor = 1.03;
+
+  int FPS = 60;
+  double speedPix = 1000 / FPS;
+  double speedRot = 3.141 / FPS;
+
 
   while (!close) //While SDL window is open
   {
@@ -394,24 +411,70 @@ void events_SDL()
           // handling of close button
           close = 1;
           break;
+
+        case SDL_KEYDOWN:
+  				// keyboard API for key pressed
+  				switch (event.key.keysym.scancode)
+          {
+    				case SDL_SCANCODE_W: //down y
+              MyCube.Center.Corner[1]+=- speedPix * Grid.step_y;
+              MyCube.SetCenter(MyCube.Center);
+    					break;
+    				case SDL_SCANCODE_A: //left x
+              MyCube.Center.Corner[0]+=- speedPix * Grid.step_x;
+              MyCube.SetCenter(MyCube.Center);
+    					break;
+    				case SDL_SCANCODE_S: //up y
+              MyCube.Center.Corner[1]+= speedPix * Grid.step_y;
+              MyCube.SetCenter(MyCube.Center);
+    					break;
+    				case SDL_SCANCODE_D: //right x
+              MyCube.Center.Corner[0]+= speedPix * Grid.step_x;
+              MyCube.SetCenter(MyCube.Center);
+    					break;
+            case SDL_SCANCODE_Q: //toward screen z
+              MyCube.Center.Corner[2]+= speedPix * Grid.step_y;
+              MyCube.SetCenter(MyCube.Center);
+    					break;
+            case SDL_SCANCODE_E: //away screen z
+              MyCube.Center.Corner[2]+=- speedPix * Grid.step_y;
+              MyCube.SetCenter(MyCube.Center);
+    					break;
+            case SDL_SCANCODE_X: //rotate in x
+    					MyCube.Rotate(speedRot, 0, 0);
+    					break;
+            case SDL_SCANCODE_Y: //rotate in y
+    					MyCube.Rotate(0, speedRot, 0);
+    					break;
+            case SDL_SCANCODE_Z: //rotate in z
+    					MyCube.Rotate(0, 0, speedRot);
+    					break;
+            case SDL_SCANCODE_UP: //increase size
+    					MyCube.Enlarge(EnlargementFactor);
+    					break;
+            case SDL_SCANCODE_DOWN: //decrease size
+    					MyCube.Enlarge(1 / EnlargementFactor);
+    					break;
+            case SDL_SCANCODE_BACKSPACE: //reset
+            {
+              MyCubeCenter.MakeCorners(0.0, 0.0, 0.0);
+              Cubes MyCubeNew(MyCubeCenter, CubeSize);
+              MyCube = MyCubeNew;
+              break;
+            }
+    				default:
+    					break;
+  				}
       }
     }
 
-    phiX+= 0.001;
-    phiY+= 0.002;
-    phiY+= 0.003;
-
-    x+=0.003;
-    y+=0.003;
-    z+=0.003;
-
-
-    MyCube.Rotate(sin(phiX) / 200, sin(phiY) / 200, sin(phiZ) / 200);
-
-    MyCubeCenter.MakeCorners(sin(x), cos(y), sin(z));
-    MyCube.SetCenter(MyCubeCenter);
+    ClearRender_SDL();
     draw_Points(MyCube.Corner, MyCube.Center, 8, Grid);
 
+
+    SDL_RenderPresent(rend);
+
+    SDL_Delay(1000 / FPS);
 
     //SDL_DestroyRenderer(rend);
   }
